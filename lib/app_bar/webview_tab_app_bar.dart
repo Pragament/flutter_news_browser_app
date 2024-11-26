@@ -23,13 +23,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_extend/share_extend.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../animated_flutter_browser_logo.dart';
 import '../custom_popup_dialog.dart';
 import '../custom_popup_menu_item.dart';
+import '../models/most_visited_website_model.dart';
 import '../popup_menu_actions.dart';
 import '../project_info_popup.dart';
 import '../webview_tab.dart';
+import 'package:http/http.dart' as http;
 
 class WebViewTabAppBar extends StatefulWidget {
   final void Function()? showFindOnPage;
@@ -77,6 +80,85 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
     });
   }
 
+
+  Future<void> _saveMostVisitedWebsite(String urlString) async {
+    final url = WebUri(urlString);
+    final box = Hive.box<MostVisitedWebsiteModel>('mostVisitedWebsites');
+    final now = DateTime.now();
+
+    // Extract title and favicon from WebViewModel
+    var browserModel = Provider.of<BrowserModel>(context, listen: false);
+    var webViewModel = browserModel.getCurrentTab()?.webViewModel;
+
+    // final name = webViewModel?.title.toString() ?? url.host;
+    final name = _extractNameFromInput(urlString);
+    final faviconUrl = webViewModel?.favicon ?? "${url.scheme}://${url.host}/favicon.ico";
+
+    // Skip saving if URL starts with "www.google"
+    if (url.host.startsWith("www.google")) {
+      print("Skipped saving: $urlString (Google URL)");
+      return;
+    }
+
+    // Check if the favicon exists and is an image
+    if (!await _isValidImageUrl(faviconUrl.toString())) {
+      print("Skipped saving: $urlString (Invalid or missing favicon)");
+      return;
+    }
+
+    // Normalize the base domain
+    final baseDomain = _extractBaseDomain(url.host);
+
+    // Check if a similar domain already exists in the box
+    final existingWebsite = box.values
+        .cast<MostVisitedWebsiteModel?>()
+        .firstWhere(
+          (website) => website != null && _extractBaseDomain(WebUri(website.domain).host) == baseDomain,
+      orElse: () => null,
+    );
+
+    if (existingWebsite != null) {
+      // Update visit count and last visit time
+      existingWebsite.visitCount += 1;
+      existingWebsite.addedAt = now;
+      await existingWebsite.save();
+      print("Updated existing website: ${existingWebsite.domain}");
+    } else {
+      // Add a new entry
+      await box.add(
+        MostVisitedWebsiteModel(
+          id: UniqueKey().toString(),
+          domain: urlString,
+          faviconUrl: faviconUrl.toString(),
+          visitCount: 1,
+          addedAt: now,
+          isFavorite: false,
+          name: name,
+        ),
+      );
+      print("Added new website: $urlString");
+    }
+  }
+
+  /// Helper function to extract the base domain
+  String _extractBaseDomain(String domain) {
+    final parts = domain.split('.');
+    return parts.length > 2 ? parts.sublist(parts.length - 2).join('.') : domain;
+  }
+
+  /// Helper function to check if a URL points to a valid image
+  Future<bool> _isValidImageUrl(String url) async {
+    try {
+      final response = await http.head(Uri.parse(url));
+      final contentType = response.headers['content-type'] ?? '';
+      return response.statusCode == 200 && contentType.startsWith('image/');
+    } catch (e) {
+      print("Error checking image URL: $url, Error: $e");
+      return false;
+    }
+  }
+
+
   @override
   void dispose() {
     _focusNode?.dispose();
@@ -96,6 +178,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
           }
           if (url != null && _focusNode != null && !_focusNode!.hasFocus) {
             _searchController?.text = url.toString();
+            _saveMostVisitedWebsite(url.toString());
           }
 
           Widget? leading = _buildAppBarHomePageWidget();
@@ -145,18 +228,18 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
       child: Stack(
         children: <Widget>[
           TextField(
-            onSubmitted: (value) {
+            onSubmitted: (value) async {
               var url = WebUri(value.trim());
-              if (!url.scheme.startsWith("http") &&
-                  !Util.isLocalizedContent(url)) {
+              if (!url.scheme.startsWith("http") && !Util.isLocalizedContent(url)) {
                 url = WebUri(settings.searchEngine.searchUrl + value);
               }
 
               if (webViewController != null) {
-                webViewController.loadUrl(urlRequest: URLRequest(url: url));
+                // Load the URL in the existing WebView
+                await webViewController.loadUrl(urlRequest: URLRequest(url: url));
               } else {
+                // Add a new tab and load the URL
                 addNewTab(url: url);
-                webViewModel.url = url;
               }
             },
             keyboardType: TextInputType.url,
@@ -206,6 +289,30 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
         ],
       ),
     );
+  }
+
+  /// Extracts a meaningful name from the search input or URL.
+  String _extractNameFromInput(String value) {
+    String result;
+
+    if (value.contains("://")) {
+      final url = WebUri(value);
+      final parts = url.host.split('.');
+
+      // Find the longest part in the domain
+      result = parts.reduce((a, b) => a.length >= b.length ? a : b);
+    } else {
+      final words = value.split(' ');
+      // If there are one or two words, take both; otherwise, take the first two
+      result = words.length <= 2 ? value : words.take(2).join(' ');
+    }
+
+    // Capitalize the first character and concatenate with the rest of the string
+    if (result.isNotEmpty) {
+      return result[0].toUpperCase() + result.substring(1);
+    }
+
+    return result; // Return empty string if result is empty
   }
 
   List<Widget> _buildActionsMenu() {
@@ -394,6 +501,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
                             onPressed: () {
                               setState(() {
                                 if (favorite != null) {
+                                  // _saveMostVisitedWebsite("www.leetcode.com");
                                   if (!browserModel
                                       .containsFavorite(favorite)) {
                                     browserModel.addFavorite(favorite);
