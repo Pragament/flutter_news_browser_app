@@ -81,65 +81,6 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
   }
 
 
-  Future<void> _saveMostVisitedWebsite(String urlString) async {
-    final url = WebUri(urlString);
-    final box = Hive.box<MostVisitedWebsiteModel>('mostVisitedWebsites');
-    final now = DateTime.now();
-
-    // Extract title and favicon from WebViewModel
-    var browserModel = Provider.of<BrowserModel>(context, listen: false);
-    var webViewModel = browserModel.getCurrentTab()?.webViewModel;
-
-    // final name = webViewModel?.title.toString() ?? url.host;
-    final name = _extractNameFromInput(urlString);
-    final faviconUrl = webViewModel?.favicon ?? "${url.scheme}://${url.host}/favicon.ico";
-
-    // Skip saving if URL starts with "www.google"
-    if (url.host.startsWith("www.google")) {
-      print("Skipped saving: $urlString (Google URL)");
-      return;
-    }
-
-    // Check if the favicon exists and is an image
-    if (!await _isValidImageUrl(faviconUrl.toString())) {
-      print("Skipped saving: $urlString (Invalid or missing favicon)");
-      return;
-    }
-
-    // Normalize the base domain
-    final baseDomain = _extractBaseDomain(url.host);
-
-    // Check if a similar domain already exists in the box
-    final existingWebsite = box.values
-        .cast<MostVisitedWebsiteModel?>()
-        .firstWhere(
-          (website) => website != null && _extractBaseDomain(WebUri(website.domain).host) == baseDomain,
-      orElse: () => null,
-    );
-
-    if (existingWebsite != null) {
-      // Update visit count and last visit time
-      existingWebsite.visitCount += 1;
-      existingWebsite.addedAt = now;
-      await existingWebsite.save();
-      print("Updated existing website: ${existingWebsite.domain}");
-    } else {
-      // Add a new entry
-      await box.add(
-        MostVisitedWebsiteModel(
-          id: UniqueKey().toString(),
-          domain: urlString,
-          faviconUrl: faviconUrl.toString(),
-          visitCount: 1,
-          addedAt: now,
-          isFavorite: false,
-          name: name,
-        ),
-      );
-      print("Added new website: $urlString");
-    }
-  }
-
   /// Helper function to extract the base domain
   String _extractBaseDomain(String domain) {
     final parts = domain.split('.');
@@ -240,6 +181,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
               } else {
                 // Add a new tab and load the URL
                 addNewTab(url: url);
+                webViewModel.url = url;
               }
             },
             keyboardType: TextInputType.url,
@@ -501,7 +443,6 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
                             onPressed: () {
                               setState(() {
                                 if (favorite != null) {
-                                  // _saveMostVisitedWebsite("www.leetcode.com");
                                   if (!browserModel
                                       .containsFavorite(favorite)) {
                                     browserModel.addFavorite(favorite);
@@ -1288,6 +1229,65 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
       final result =
           await webViewController!.evaluateJavascript(source: finalJsCode);
       debugPrint("rrrrrrrrrrrr" + result.toString());
+    }
+  }
+
+  Future<void> _saveMostVisitedWebsite(String urlString) async {
+    final url = WebUri(urlString);
+    final box = Hive.box<MostVisitedWebsiteModel>('mostVisitedWebsites');
+    final now = DateTime.now();
+
+    // Extract title and favicon from WebViewModel
+    var browserModel = Provider.of<BrowserModel>(context, listen: false);
+    var webViewModel = browserModel.getCurrentTab()?.webViewModel;
+
+    // final name = webViewModel?.title.toString() ?? url.host;
+    final name = _extractNameFromInput(urlString);
+    final faviconUrl = webViewModel?.favicon ?? "${url.scheme}://${url.host}/favicon.ico";
+
+    // Skip saving if URL starts with "www.google"
+    if (url.host.startsWith("www.google")) {
+      print("Skipped saving: $urlString (Google URL)");
+      return;
+    }
+
+    // Check if the favicon exists and is an image
+    if (!await _isValidImageUrl(faviconUrl.toString())) {
+      print("Skipped saving: $urlString (Invalid or missing favicon)");
+      return;
+    }
+
+    // Normalize the base domain
+    final baseDomain = _extractBaseDomain(url.host);
+
+    // Check if a similar domain already exists in the box
+    final existingWebsite = box.values
+        .cast<MostVisitedWebsiteModel?>()
+        .firstWhere(
+          (website) => website != null && _extractBaseDomain(WebUri(website.domain).host) == baseDomain,
+      orElse: () => null,
+    );
+
+    if (existingWebsite != null) {
+      // Update visit count and last visit time
+      existingWebsite.visitCount += 1;
+      existingWebsite.addedAt = now;
+      await existingWebsite.save();
+      print("Updated existing website: ${existingWebsite.domain}");
+    } else {
+      // Add a new entry
+      await box.add(
+        MostVisitedWebsiteModel(
+          id: UniqueKey().toString(),
+          domain: urlString,
+          faviconUrl: faviconUrl.toString(),
+          visitCount: 1,
+          addedAt: now,
+          isFavorite: false,
+          name: name,
+        ),
+      );
+      print("Added new website: $urlString");
     }
   }
 }
