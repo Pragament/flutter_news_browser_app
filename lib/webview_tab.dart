@@ -23,17 +23,21 @@ import 'javascript_console_result.dart';
 import 'long_press_alert_dialog.dart';
 import 'models/browser_model.dart';
 
-// check onload
-final webViewTabStateKey = GlobalKey<_WebViewTabState>();
+// Remove the global key declaration entirely
+
 
 class WebViewTab extends StatefulWidget {
   const WebViewTab({Key? key, required this.webViewModel}) : super(key: key);
 
   final WebViewModel webViewModel;
+  
+  // Add a method to access the state
+  _WebViewTabState? getState() => key != null ? (key as GlobalKey<_WebViewTabState>).currentState : null;
 
   @override
   State<WebViewTab> createState() => _WebViewTabState();
 }
+
 
 class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
   InAppWebViewController? _webViewController;

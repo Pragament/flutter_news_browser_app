@@ -145,10 +145,10 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
 
       if (isCurrentTab) {
         Future.delayed(const Duration(milliseconds: 100), () {
-          webViewTabStateKey.currentState?.onShowTab();
+          (webViewTab as WebViewTab).getState()?.onShowTab();
         });
       } else {
-        webViewTabStateKey.currentState?.onHideTab();
+        (webViewTab as WebViewTab).getState()?.onHideTab();
       }
     }
 
@@ -192,7 +192,7 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
             body: TabViewer(
               currentIndex: browserModel.getCurrentTabIndex(),
               children: browserModel.webViewTabs.map((webViewTab) {
-                webViewTabStateKey.currentState?.pause();
+                (webViewTab as WebViewTab).getState()?.pause();
                 var screenshotData = webViewTab.webViewModel.screenshot;
                 Widget screenshotImage = Container(
                   decoration: const BoxDecoration(color: Colors.white),
@@ -225,14 +225,6 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                         leading: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
-                            // CachedNetworkImage(
-                            //   placeholder: (context, url) =>
-                            //   url == "about:blank"
-                            //       ? Container()
-                            //       : CircularProgressIndicator(),
-                            //   imageUrl: faviconUrl,
-                            //   height: 30,
-                            // )
                             CustomImage(
                                 url: faviconUrl, maxWidth: 30.0, height: 30.0)
                           ],

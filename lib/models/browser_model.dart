@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_browser/Db/hive_db_helper.dart';
 import 'package:flutter_browser/models/web_archive_model.dart';
 import 'package:flutter_browser/rss_news/models/website_list.dart';
+import 'package:flutter_browser/rss_news/services/whitelist.dart';
 import 'package:flutter_browser/rss_news/utils/debug.dart';
 import 'package:flutter_browser/rss_news/utils/show_snackbar.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -128,18 +129,14 @@ class BrowserModel extends ChangeNotifier {
   }
 
   void addTab(WebViewTab webViewTab) {
-    List<Website> websites = HiveDBHelper.getWhitelistedWebsites();
-    Set<String> whitelistDomains = websites.map((e) => e.domain).toSet();
-    // debug(whitelistDomains);
+    // Use the Whitelist.isWebsiteAllowed method for consistent validation
     if (webViewTab.webViewModel.url != null) {
-      var domain = (webViewTab.webViewModel.url!).host;
-      debug(domain);
-      if (!whitelistDomains.contains(domain)) {
+      if (!Whitelist.isWebsiteAllowed(webViewTab.webViewModel.url!)) {
         showSnackBar(message: "This website is not allowed");
         return;
       }
     }
-    webViewTab.webViewModel.url;
+    
     _homePage = true;
     _webViewTabs.add(webViewTab);
     _currentTabIndex = _webViewTabs.length - 1;
@@ -147,7 +144,6 @@ class BrowserModel extends ChangeNotifier {
     _currentWebViewModel.updateWithValue(webViewTab.webViewModel);
     notifyListeners();
   }
-
   void addTabs(List<WebViewTab> webViewTabs) {
     _homePage = true;
     for (var webViewTab in webViewTabs) {
