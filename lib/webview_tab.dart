@@ -5,6 +5,7 @@ import 'package:flutter_browser/Db/hive_db_helper.dart';
 import 'package:flutter_browser/main.dart';
 import 'package:flutter_browser/models/webview_model.dart';
 import 'package:flutter_browser/rss_news/grpahql/graphql_requests.dart';
+import 'package:flutter_browser/rss_news/models/rules_model.dart';
 import 'package:flutter_browser/rss_news/models/website_list.dart';
 import 'package:flutter_browser/rss_news/provider/adblock_filter_provider.dart';
 import 'package:flutter_browser/rss_news/services/custom_rules.dart';
@@ -23,16 +24,13 @@ import 'javascript_console_result.dart';
 import 'long_press_alert_dialog.dart';
 import 'models/browser_model.dart';
 
-// Remove the global key declaration entirely
-
-
 class WebViewTab extends StatefulWidget {
   const WebViewTab({Key? key, required this.webViewModel}) : super(key: key);
 
   final WebViewModel webViewModel;
   
   // Add a method to access the state
-  _WebViewTabState? getState() => key != null ? (key as GlobalKey<_WebViewTabState>).currentState : null;
+  _WebViewTabState? getState() => key is GlobalKey<_WebViewTabState> ? (key as GlobalKey<_WebViewTabState>).currentState : null;
 
   @override
   State<WebViewTab> createState() => _WebViewTabState();
@@ -75,7 +73,6 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       _findInteractionController = FindInteractionController();
       setupContextMenu();
     }
-    // _loadEasyListRules();
   }
 
   @override
@@ -84,7 +81,6 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
     widget.webViewModel.webViewController = null;
     widget.webViewModel.pullToRefreshController = null;
     widget.webViewModel.findInteractionController = null;
-// widget.pull
     _httpAuthUsernameController.dispose();
     _httpAuthPasswordController.dispose();
 
@@ -137,14 +133,6 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
   void resumeTimers() {
     _webViewController?.resumeTimers();
   }
-
-// Future<void> _loadEasyListRules() async {
-//   // Load EasyList file
-//   var blockers = await AdBlockService().loadEasyListRules(context);
-//   setState(() {
-//     contentBlockers = blockers;
-//   });
-// }
 
   void setupContextMenu() {
     contextMenu = ContextMenu(
@@ -259,11 +247,6 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
     initialSettings.isFraudulentWebsiteWarningEnabled = true;
     initialSettings.disableLongPressContextMenuOnLinks = true;
     initialSettings.allowingReadAccessTo = WebUri('file://$WEB_ARCHIVE_DIR/');
-    // try {
-    //   initialSettings.contentBlockers = adblockFilterProvider.activeBlockers;
-    // } catch (e) {
-    //   showSnackBar(  message:"Error setting content blockers: $e");
-    // }
 
     return InAppWebView(
       contextMenu: contextMenu,
@@ -286,13 +269,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         if (Util.isAndroid()) {
           controller.startSafeBrowsing();
         }
-        //   if (adblockFilterProvider.iscontentBlockerEnabled) {
-        //   try {
-        //     await _webViewController.setconte (adblockFilterProvider.activeBlockers);
-        //   } catch (e) {
-        //     debugPrint('Error setting content blockers: $e');
-        //   }
-        // }
+
         widget.webViewModel.settings = await controller.getSettings();
 
         if (isCurrentTab(currentWebViewModel)) {
@@ -320,6 +297,163 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
               );
             }
           },
+        );
+        
+        // Setup DOM inspector handler (will only be used when inspection mode is active)
+        controller.addJavaScriptHandler(
+          handlerName: 'inspectorElementSelected',
+          callback: (args) async {
+            if (args.isNotEmpty && widget.webViewModel.isInspectMode) {
+              final elementData = args[0];
+              debug('Selected element: $elementData');
+              
+              // Pre-populate rule values
+              String? ruleCategory;
+              String? ruleType;
+              String ruleValue = '';
+              String websiteDomainValue = widget.webViewModel.url?.host ?? '';
+              
+              // Set the rule type and value based on the selected element
+              if (elementData['id'] != null && elementData['id'].toString().isNotEmpty) {
+                ruleType = "Id";
+                ruleValue = elementData['id'].toString();
+              } else if (elementData['className'] != null && elementData['className'].toString().isNotEmpty) {
+                ruleType = "Class";
+                ruleValue = elementData['className'].toString().split(' ')[0];
+              }
+              
+              TextEditingController ruleValueController = 
+                  TextEditingController(text: ruleValue);
+                  
+              TextEditingController websiteDomainController = 
+                  TextEditingController(text: websiteDomainValue);
+              
+              // ignore: use_build_context_synchronously
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Add Rule from Selected Element"),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text("Element: ${elementData['tagName']}"),
+                      if (elementData['id'] != null && elementData['id'].toString().isNotEmpty)
+                        Text("ID: ${elementData['id']}"),
+                      if (elementData['className'] != null && elementData['className'].toString().isNotEmpty)
+                        Text("Class: ${elementData['className']}"),
+                        
+                      const SizedBox(height: 16),
+                      
+                      DropdownButtonFormField<String>(
+                        value: ruleCategory,
+                        items: const [
+                          DropdownMenuItem(
+                            value: "AdBlock",
+                            child: Text("Adblock"),
+                          ),
+                          DropdownMenuItem(
+                            value: "Immersive Reader",
+                            child: Text("Immersive Reader"),
+                          ),
+                        ],
+                        onChanged: (String? value) {
+                          ruleCategory = value!;
+                        },
+                        decoration: const InputDecoration(labelText: "Rule Category"),
+                      ),
+                      
+                      DropdownButtonFormField<String>(
+                        value: ruleType,
+                        items: const [
+                          DropdownMenuItem(
+                            value: "Class",
+                            child: Text("Class"),
+                          ),
+                          DropdownMenuItem(
+                            value: "Id",
+                            child: Text("Id"),
+                          ),
+                        ],
+                        onChanged: (String? value) {
+                          ruleType = value!;
+                        },
+                        decoration: const InputDecoration(labelText: "Rule Type"),
+                      ),
+                      
+                      TextField(
+                        onChanged: (value) => ruleValue = value,
+                        controller: ruleValueController,
+                        decoration: const InputDecoration(labelText: "Class or Id"),
+                      ),
+                      
+                      TextField(
+                        onChanged: (value) => websiteDomainValue = value,
+                        controller: websiteDomainController,
+                        decoration: const InputDecoration(labelText: "Website Domain"),
+                        ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancel"),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        if (ruleCategory == null ||
+                            ruleType == null ||
+                            ruleValue.isEmpty ||
+                            websiteDomainValue.isEmpty) {
+                          // If any field is empty, show an error
+                          // ignore: use_build_context_synchronously
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text("Error"),
+                              content: const Text("All fields are required."),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context); // Close the error dialog
+                                  },
+                                  child: const Text("OK"),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          // Add the rule
+                          await HiveDBHelper.addRule(Rules(
+                            category: ruleCategory!,
+                            type: ruleType!,
+                            value: ruleValue,
+                            domain: websiteDomainValue,
+                          ));
+                          
+                          // Apply the rule immediately
+                          await customRules.removeElementsUsingRules(
+                            _webViewController,
+                            ruleCategory!,
+                            ruleType!,
+                            ruleCategory == "AdBlock" 
+                              ? browserModel.getSettings().adsDisabled 
+                              : browserModel.getSettings().immersiveReaderEnabled,
+                            widget.webViewModel.url
+                          );
+                          
+                          // Show success message
+                          showSnackBar(message: "Rule added successfully");
+                          
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text("Add"),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
         );
       },
       onLoadStart: (controller, url) async {
@@ -419,6 +553,105 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
               );
           widget.webViewModel.screenshot = await screenshotData;
         }
+        
+        // Re-inject inspector script if inspect mode is enabled
+        if (widget.webViewModel.isInspectMode) {
+          await controller.evaluateJavascript(source: '''
+            (function() {
+              // Store original styles
+              window.inspectorOriginalStyles = new Map();
+              window.inspectorHighlightedElement = null;
+              
+              // Add highlight function
+              window.inspectorHighlightElement = function(element) {
+                // Reset previous element if exists
+                if (window.inspectorHighlightedElement) {
+                  window.inspectorHighlightedElement.style.outline = window.inspectorOriginalStyles.get(window.inspectorHighlightedElement) || '';
+                }
+                
+                // Store original style and highlight new element
+                window.inspectorOriginalStyles.set(element, element.style.outline);
+                element.style.outline = '2px solid red';
+                window.inspectorHighlightedElement = element;
+              };
+              
+              // Event handler for clicks
+              window.inspectorClickHandler = function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Extract element data
+                const el = event.target;
+                const computedStyle = window.getComputedStyle(el);
+                
+                // Create attribute list
+                const attributes = {};
+                for (let i = 0; i < el.attributes.length; i++) {
+                  const attr = el.attributes[i];
+                  attributes[attr.name] = attr.value;
+                }
+                
+                // Highlight the element
+                window.inspectorHighlightElement(el);
+                
+                // Send data to Flutter
+                window.flutter_inappwebview.callHandler('inspectorElementSelected', {
+                  tagName: el.tagName,
+                  id: el.id,
+                  className: el.className,
+                  attributes: attributes,
+                  innerText: el.innerText ? el.innerText.substring(0, 100) : '',
+                  computedStyles: {
+                    width: computedStyle.width,
+                    height: computedStyle.height,
+                    backgroundColor: computedStyle.backgroundColor,
+                    color: computedStyle.color,
+                    display: computedStyle.display,
+                    position: computedStyle.position
+                  }
+                });
+                
+                return false;
+              };
+              
+              // Add event listeners to all elements
+              document.addEventListener('click', window.inspectorClickHandler, true);
+              
+              // Add mouseover highlighting
+              window.inspectorMouseOverHandler = function(event) {
+                const el = event.target;
+                
+                // Store original style and add highlight
+                if (!window.inspectorTempStyles) {
+                  window.inspectorTempStyles = new Map();
+                }
+                
+                if (!window.inspectorTempStyles.has(el)) {
+                  window.inspectorTempStyles.set(el, el.style.outline);
+                }
+                
+                if (el !== window.inspectorHighlightedElement) {
+                  el.style.outline = '2px dashed blue';
+                }
+              };
+              
+              window.inspectorMouseOutHandler = function(event) {
+                const el = event.target;
+                
+                // Restore original style if not the selected element
+                if (el !== window.inspectorHighlightedElement && window.inspectorTempStyles) {
+                  el.style.outline = window.inspectorTempStyles.get(el) || '';
+                  window.inspectorTempStyles.delete(el);
+                }
+              };
+              
+              document.addEventListener('mouseover', window.inspectorMouseOverHandler, true);
+              document.addEventListener('mouseout', window.inspectorMouseOutHandler, true);
+              
+              return "Inspector mode re-enabled";
+            })();
+          ''');
+        }
       },
       onProgressChanged: (controller, progress) {
         if (progress == 100) {
@@ -500,9 +733,6 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         var url = navigationAction.request.url;
-
-        // List<Website> websites = HiveDBHelper.getWhitelistedWebsites();
-        // Set<String> whitelistDomains = websites.map((e) => e.domain).toSet();
 
         if (url != null) {
           if (!Whitelist.isWebsiteAllowed(url)) {
@@ -621,7 +851,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       },
       onCreateWindow: (controller, createWindowRequest) async {
         var webViewTab = WebViewTab(
-          key: GlobalKey(),
+           key: GlobalKey<_WebViewTabState>(), 
           webViewModel: WebViewModel(
               url: WebUri("about:blank"),
               windowId: createWindowRequest.windowId),

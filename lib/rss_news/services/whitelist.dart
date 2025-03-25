@@ -16,6 +16,11 @@ class Whitelist {
   }
 
   static bool isWebsiteAllowed(WebUri url) {
+    // TEMPORARY BYPASS FOR TESTING PURPOSES
+    // This will allow all websites so you can test the DOM inspector
+    return true;
+    
+    /* Original implementation - uncomment after testing
     // Get the whitelist of websites
     List<Website> websites = HiveDBHelper.getWhitelistedWebsites();
     Set<String> whitelistDomains = websites.map((e) => e.domain).toSet();
@@ -33,5 +38,6 @@ class Whitelist {
       return true;
     }
     return false;
+    */
   }
 }

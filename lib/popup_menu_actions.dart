@@ -18,7 +18,13 @@ class PopupMenuActions {
   // ignore: constant_identifier_names
   static const String FETCH_GEMINI_AI_HIGHLIGHTS = "Fetch Gemini AI highlights";
   // ignore: constant_identifier_names
+  static const String BLOCK_ADS = "Block Adds";
+  // ignore: constant_identifier_names
+  static const String READER_MODE = "Reader Mode";
+  // ignore: constant_identifier_names
   static const String DESKTOP_MODE = "Desktop mode";
+  // ignore: constant_identifier_names
+  static const String INSPECT_ELEMENTS_MODE = "Inspect elements mode"; // New option
   // ignore: constant_identifier_names
   static const String SETTINGS = "Settings";
   // ignore: constant_identifier_names
@@ -36,7 +42,10 @@ class PopupMenuActions {
     SHARE,
     FIND_ON_PAGE,
     FETCH_GEMINI_AI_HIGHLIGHTS,
+    BLOCK_ADS,
+    READER_MODE,
     DESKTOP_MODE,
+    INSPECT_ELEMENTS_MODE, // Added to the list
     SETTINGS,
     DEVELOPERS,
     INAPPWEBVIEW_PROJECT,
