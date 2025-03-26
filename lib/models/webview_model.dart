@@ -13,6 +13,7 @@ class WebViewModel extends ChangeNotifier {
   late bool _loaded;
   late bool _isDesktopMode;
   late bool _isIncognitoMode;
+  late bool _isInspectMode;
   late List<Widget> _javaScriptConsoleResults;
   late List<String> _javaScriptConsoleHistory;
   late List<LoadedResource> _loadedResources;
@@ -35,6 +36,7 @@ class WebViewModel extends ChangeNotifier {
       bool loaded = false,
       bool isDesktopMode = false,
       bool isIncognitoMode = false,
+      bool isInspectMode = false,
       List<Widget>? javaScriptConsoleResults,
       List<String>? javaScriptConsoleHistory,
       List<LoadedResource>? loadedResources,
@@ -47,11 +49,13 @@ class WebViewModel extends ChangeNotifier {
       this.needsToCompleteInitialLoad = true}) {
     _tabIndex = tabIndex;
     _url = url;
+    _title = title;
     _favicon = favicon;
     _progress = progress;
     _loaded = loaded;
     _isDesktopMode = isDesktopMode;
     _isIncognitoMode = isIncognitoMode;
+    _isInspectMode = isInspectMode;
     _javaScriptConsoleResults = javaScriptConsoleResults ?? <Widget>[];
     _javaScriptConsoleHistory = javaScriptConsoleHistory ?? <String>[];
     _loadedResources = loadedResources ?? <LoadedResource>[];
@@ -131,6 +135,15 @@ class WebViewModel extends ChangeNotifier {
     }
   }
 
+  bool get isInspectMode => _isInspectMode;
+
+  set isInspectMode(bool value) {
+    if (value != _isInspectMode) {
+      _isInspectMode = value;
+      notifyListeners();
+    }
+  }
+
   UnmodifiableListView<Widget> get javaScriptConsoleResults =>
       UnmodifiableListView(_javaScriptConsoleResults);
 
@@ -194,6 +207,7 @@ class WebViewModel extends ChangeNotifier {
     loaded = webViewModel.loaded;
     isDesktopMode = webViewModel.isDesktopMode;
     isIncognitoMode = webViewModel.isIncognitoMode;
+    isInspectMode = webViewModel.isInspectMode;
     setJavaScriptConsoleResults(
         webViewModel._javaScriptConsoleResults.toList());
     setJavaScriptConsoleHistory(
@@ -223,6 +237,7 @@ class WebViewModel extends ChangeNotifier {
             progress: map["progress"],
             isDesktopMode: map["isDesktopMode"],
             isIncognitoMode: map["isIncognitoMode"],
+            isInspectMode: map["isInspectMode"] ?? false,
             javaScriptConsoleHistory:
                 map["javaScriptConsoleHistory"]?.cast<String>(),
             isSecure: map["isSecure"],
@@ -240,6 +255,7 @@ class WebViewModel extends ChangeNotifier {
       "progress": _progress,
       "isDesktopMode": _isDesktopMode,
       "isIncognitoMode": _isIncognitoMode,
+      "isInspectMode": _isInspectMode,
       "javaScriptConsoleHistory": _javaScriptConsoleHistory,
       "isSecure": _isSecure,
       "settings": settings?.toMap(),

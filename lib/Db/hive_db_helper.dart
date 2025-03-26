@@ -26,7 +26,7 @@ class HiveDBHelper {
     await Hive.openBox<List<String>>('preferences');
     await Hive.openBox('token');
     await Hive.openBox('highlights');
-    await Hive.openBox('whilteListWebsites');
+    await Hive.openBox('whiteListWebsites');
     debugPrint("Initialized Hive DB successfully");
   }
 
@@ -144,10 +144,11 @@ class HiveDBHelper {
 
   static Future<void> setWhitelistedWebsites(List<Website>? websites) async {
     // Save back to box
-    Hive.box('whilteListWebsites').clear();
-    await box.put("whilteListWebsites", websites);
+    Hive.box('whiteListWebsites').clear();
+    await Hive.box('whiteListWebsites').put("whiteListWebsites", websites);
   }
+  
   static List<Website> getWhitelistedWebsites() {
-    return box.get("whilteListWebsites")?.cast<Website>() ?? [];
+    return Hive.box('whiteListWebsites').get("whiteListWebsites")?.cast<Website>() ?? [];
   } 
 }

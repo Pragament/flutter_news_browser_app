@@ -9,6 +9,7 @@ import 'package:flutter_browser/rss_news/provider/adblock_filter_provider.dart';
 import 'package:flutter_browser/rss_news/services/adblock_service.dart';
 import 'package:flutter_browser/rss_news/utils/debug.dart';
 import 'package:flutter_browser/rss_news/widgets/adblock_selection.dart';
+import 'package:flutter_browser/rss_news/widgets/dom_inspector_widget.dart';
 import 'package:flutter_browser/rss_news/widgets/kiosk_mode_switch.dart';
 import 'package:flutter_browser/rss_news/widgets/register_child_widget.dart';
 import 'package:flutter_browser/rss_news/widgets/register_device_widget.dart';
@@ -273,6 +274,8 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
           });
         },
       ),
+      // Add DOM Inspector widget here
+      const DomInspectorWidget(),
       FutureBuilder(
         future: InAppWebViewController.getDefaultUserAgent(),
         builder: (context, snapshot) {
