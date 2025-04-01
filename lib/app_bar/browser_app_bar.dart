@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_browser/app_bar/desktop_app_bar.dart';
 import 'package:flutter_browser/app_bar/find_on_page_app_bar.dart';
 import 'package:flutter_browser/app_bar/webview_tab_app_bar.dart';
+import 'package:flutter_browser/util.dart';
 
 class BrowserAppBar extends StatefulWidget implements PreferredSizeWidget {
-  const BrowserAppBar({Key? key})
-      : preferredSize = const Size.fromHeight(kToolbarHeight),
-        super(key: key);
+  BrowserAppBar({super.key})
+      : preferredSize =
+            Size.fromHeight(Util.isMobile() ? kToolbarHeight : 90.0);
 
   @override
   State<BrowserAppBar> createState() => _BrowserAppBarState();
@@ -19,7 +21,13 @@ class _BrowserAppBarState extends State<BrowserAppBar> {
 
   @override
   Widget build(BuildContext context) {
-    return _isFindingOnPage
+    final List<Widget> children = [];
+
+    if (Util.isDesktop()) {
+      children.add(const DesktopAppBar());
+    }
+
+    children.add(_isFindingOnPage
         ? FindOnPageAppBar(
             hideFindOnPage: () {
               setState(() {
@@ -33,6 +41,10 @@ class _BrowserAppBarState extends State<BrowserAppBar> {
                 _isFindingOnPage = true;
               });
             },
-          );
+          ));
+
+    return Column(
+      children: children,
+    );
   }
 }

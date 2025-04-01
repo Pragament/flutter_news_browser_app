@@ -23,11 +23,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'javascript_console_result.dart';
 import 'long_press_alert_dialog.dart';
 import 'models/browser_model.dart';
+import 'models/window_model.dart';
 
 class WebViewTab extends StatefulWidget {
-  const WebViewTab({Key? key, required this.webViewModel}) : super(key: key);
+ WebViewTab({super.key, required this.webViewModel});
 
   final WebViewModel webViewModel;
+  final FocusNode _focusNode = FocusNode();
   
   // Add a method to access the state
   _WebViewTabState? getState() => key is GlobalKey<_WebViewTabState> ? (key as GlobalKey<_WebViewTabState>).currentState : null;
@@ -41,6 +43,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
   InAppWebViewController? _webViewController;
   PullToRefreshController? _pullToRefreshController;
   FindInteractionController? _findInteractionController;
+  FocusNode? _focusNode;
   bool _isWindowClosed = false;
   CustomRules customRules = CustomRules();
   final TextEditingController _httpAuthUsernameController =
@@ -53,6 +56,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     super.initState();
+    _focusNode = FocusNode();
     _isWebsiteAllowed = Whitelist.isWebsiteAllowed(widget.webViewModel.url!);
     if (_isWebsiteAllowed) {
       _pullToRefreshController = kIsWeb
@@ -84,6 +88,9 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
     _httpAuthUsernameController.dispose();
     _httpAuthPasswordController.dispose();
 
+    _focusNode?.dispose();
+     _focusNode = null;
+
     WidgetsBinding.instance.removeObserver(this);
 
     super.dispose();
@@ -91,7 +98,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_webViewController != null && Util.isAndroid()) {
+    if (_webViewController != null && (Util.isAndroid() || Util.isWindows())) {
       if (state == AppLifecycleState.paused) {
         pauseAll();
       } else {
@@ -101,37 +108,41 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
   }
 
   void pauseAll() {
-    if (Util.isAndroid()) {
+    if (Util.isAndroid() || Util.isWindows()) {
       _webViewController?.pause();
     }
     pauseTimers();
   }
 
   void resumeAll() {
-    if (Util.isAndroid()) {
+    if (Util.isAndroid() || Util.isWindows()) {
       _webViewController?.resume();
     }
     resumeTimers();
   }
 
   void pause() {
-    if (Util.isAndroid()) {
+    if (Util.isAndroid() || Util.isWindows()) {
       _webViewController?.pause();
     }
   }
 
   void resume() {
-    if (Util.isAndroid()) {
+    if (Util.isAndroid() || Util.isWindows()) {
       _webViewController?.resume();
     }
   }
 
   void pauseTimers() {
-    _webViewController?.pauseTimers();
+    if (!Util.isWindows()) {
+      _webViewController?.pauseTimers();
+    }
   }
 
   void resumeTimers() {
-    _webViewController?.resumeTimers();
+    if (!Util.isWindows()) {
+      _webViewController?.resumeTimers();
+    }
   }
 
   void setupContextMenu() {
@@ -216,6 +227,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
 
   InAppWebView _buildWebView() {
     var browserModel = Provider.of<BrowserModel>(context, listen: true);
+    var windowModel = Provider.of<WindowModel>(context, listen: true);
     var settings = browserModel.getSettings();
     var currentWebViewModel = Provider.of<WebViewModel>(context, listen: true);
     var adblockFilterProvider = Provider.of<AdblockFilterProvider>(context);
@@ -231,8 +243,10 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
     initialSettings.useOnLoadResource = true;
     initialSettings.useShouldOverrideUrlLoading = true;
     initialSettings.javaScriptCanOpenWindowsAutomatically = true;
-    initialSettings.userAgent =
-        "Mozilla/5.0 (Linux; Android 9; LG-H870 Build/PKQ1.190522.001) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/83.0.4103.106 Mobile Safari/537.36";
+    if (Util.isIOS() || Util.isAndroid()) {
+      initialSettings.userAgent =
+          "Mozilla/5.0 (Linux; Android 9; LG-H870 Build/PKQ1.190522.001) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/83.0.4103.106 Mobile Safari/537.36";
+    }
     initialSettings.transparentBackground = true;
 
     initialSettings.safeBrowsingEnabled = true;
@@ -251,6 +265,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
     return InAppWebView(
       contextMenu: contextMenu,
       keepAlive: widget.webViewModel.keepAlive,
+      // webViewEnvironment: webViewEnvironment,
       initialUrlRequest: URLRequest(url: widget.webViewModel.url),
       initialSettings: initialSettings,
       windowId: widget.webViewModel.windowId,
@@ -468,6 +483,8 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         } else if (widget.webViewModel.needsToCompleteInitialLoad) {
           controller.stopLoading();
         }
+
+        windowModel.notifyWebViewTabUpdated();
       },
       onLoadStop: (controller, url) async {
         _pullToRefreshController?.endRefreshing();
@@ -509,9 +526,9 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
 
         await HilightService().injectHighlightJS(_webViewController);
 
-        var sslCertificateFuture = _webViewController?.getCertificate();
-        var titleFuture = _webViewController?.getTitle();
-        var faviconsFuture = _webViewController?.getFavicons();
+        var sslCertificateFuture = controller.getCertificate();
+        var titleFuture = controller.getTitle();
+        var faviconsFuture = controller.getFavicons();
 
         var sslCertificate = await sslCertificateFuture;
         if (sslCertificate == null && !Util.isLocalizedContent(url!)) {
@@ -520,7 +537,14 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
 
         widget.webViewModel.title = await titleFuture;
 
-        List<Favicon>? favicons = await faviconsFuture;
+        List<Favicon>? favicons;
+        try {
+          favicons = await faviconsFuture;
+        } catch (e) {
+          if (kDebugMode) {
+            print(e);
+          }
+        }
         if (favicons != null && favicons.isNotEmpty) {
           for (var fav in favicons) {
             if (widget.webViewModel.favicon == null) {
@@ -543,8 +567,8 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
           widget.webViewModel.needsToCompleteInitialLoad = false;
           currentWebViewModel.updateWithValue(widget.webViewModel);
 
-          var screenshotData = _webViewController
-              ?.takeScreenshot(
+          var screenshotData = controller
+              .takeScreenshot(
                   screenshotConfiguration: ScreenshotConfiguration(
                       compressFormat: CompressFormat.JPEG, quality: 20))
               .timeout(
@@ -666,17 +690,18 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       },
       onUpdateVisitedHistory: (controller, url, androidIsReload) async {
         widget.webViewModel.url = url;
-        widget.webViewModel.title = await _webViewController?.getTitle();
+        widget.webViewModel.title = await controller.getTitle();
 
         if (isCurrentTab(currentWebViewModel)) {
           currentWebViewModel.updateWithValue(widget.webViewModel);
         }
+        windowModel.notifyWebViewTabUpdated();
       },
       onLongPressHitTestResult: (controller, hitTestResult) async {
         if (LongPressAlertDialog.hitTestResultSupported
             .contains(hitTestResult.type)) {
           var requestFocusNodeHrefResult =
-              await _webViewController?.requestFocusNodeHref();
+              await controller.requestFocusNodeHref();
 
           if (requestFocusNodeHrefResult != null) {
             showDialog(
@@ -775,7 +800,8 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       onReceivedServerTrustAuthRequest: (controller, challenge) async {
         var sslError = challenge.protectionSpace.sslError;
         if (sslError != null && (sslError.code != null)) {
-          if (Util.isIOS() && sslError.code == SslErrorType.UNSPECIFIED) {
+          if ((Util.isIOS() || Util.isMacOS()) &&
+              sslError.code == SslErrorType.UNSPECIFIED) {
             return ServerTrustAuthResponse(
                 action: ServerTrustAuthResponseAction.PROCEED);
           }
@@ -797,8 +823,14 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
 
         _pullToRefreshController?.endRefreshing();
 
-        if (Util.isIOS() && error.type == WebResourceErrorType.CANCELLED) {
+        if ((Util.isIOS() || Util.isMacOS() || Util.isWindows()) &&
+            error.type == WebResourceErrorType.CANCELLED) {
           // NSURLErrorDomain
+          return;
+        }
+        if (Util.isWindows() &&
+            error.type == WebResourceErrorType.CONNECTION_ABORTED) {
+          // CONNECTION_ABORTED
           return;
         }
 
@@ -848,6 +880,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         if (isCurrentTab(currentWebViewModel)) {
           currentWebViewModel.updateWithValue(widget.webViewModel);
         }
+        windowModel.notifyWebViewTabUpdated();
       },
       onCreateWindow: (controller, createWindowRequest) async {
         var webViewTab = WebViewTab(
@@ -857,7 +890,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
               windowId: createWindowRequest.windowId),
         );
 
-        browserModel.addTab(webViewTab);
+        windowModel.addTab(webViewTab);
 
         return true;
       },
@@ -867,7 +900,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         }
         _isWindowClosed = true;
         if (widget.webViewModel.tabIndex != null) {
-          browserModel.closeTab(widget.webViewModel.tabIndex!);
+          windowModel.closeTab(widget.webViewModel.tabIndex!);
         }
       },
       onPermissionRequest: (controller, permissionRequest) async {

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_browser/models/browser_model.dart';
 import 'package:flutter_browser/models/webview_model.dart';
+import 'package:flutter_browser/models/window_model.dart';
 import 'package:flutter_browser/rss_news/utils/debug.dart';
 import 'package:flutter_browser/Db/hive_db_helper.dart';
 import 'package:flutter_browser/rss_news/models/rules_model.dart';
@@ -23,9 +24,10 @@ class _DomInspectorWidgetState extends State<DomInspectorWidget> {
     var currentWebViewModel = Provider.of<WebViewModel>(context, listen: true);
     var browserModel = Provider.of<BrowserModel>(context, listen: true);
 
-    // If there's no active WebView, show a disabled toggle
-    bool hasActiveWebView = browserModel.webViewTabs.isNotEmpty && 
-                           currentWebViewModel.webViewController != null;
+   
+   final windowModel = Provider.of<WindowModel>(context, listen: true);
+   bool hasActiveWebView = windowModel.webViewTabs.isNotEmpty && 
+                       currentWebViewModel.webViewController != null;
 
     return SwitchListTile(
       title: const Text("Inspect elements mode"),

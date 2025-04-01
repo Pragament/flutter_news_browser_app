@@ -53,10 +53,9 @@ class CustomPopupDialog extends StatefulWidget {
   final Duration transitionDuration;
 
   const CustomPopupDialog(
-      {Key? key,
+      {super.key,
       required this.child,
-      this.transitionDuration = const Duration(milliseconds: 300)})
-      : super(key: key);
+      this.transitionDuration = const Duration(milliseconds: 300)});
 
   @override
   State<StatefulWidget> createState() => _CustomPopupDialogState();

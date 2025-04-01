@@ -1,4 +1,12 @@
+import 'package:flutter_browser/util.dart';
+
 class PopupMenuActions {
+  // ignore: constant_identifier_names
+  static const String OPEN_NEW_WINDOW = "Open New Window";
+  // ignore: constant_identifier_names
+  static const String SAVE_WINDOW = "Save Window";
+  // ignore: constant_identifier_names
+  static const String SAVED_WINDOWS = "Saved Windows";
   // ignore: constant_identifier_names
   static const String NEW_TAB = "New tab";
   // ignore: constant_identifier_names

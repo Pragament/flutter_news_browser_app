@@ -25,6 +25,9 @@ class WebViewModel extends ChangeNotifier {
   FindInteractionController? findInteractionController;
   Uint8List? screenshot;
   bool needsToCompleteInitialLoad;
+  final DateTime _createdTime;
+  DateTime _lastOpenedTime;
+
   final keepAlive = InAppWebViewKeepAlive();
 
   WebViewModel(
@@ -41,12 +44,16 @@ class WebViewModel extends ChangeNotifier {
       List<String>? javaScriptConsoleHistory,
       List<LoadedResource>? loadedResources,
       bool isSecure = false,
+      DateTime? createdTime,
+      DateTime? lastOpenedTime,
       this.windowId,
       this.settings,
       this.webViewController,
       this.pullToRefreshController,
       this.findInteractionController,
-      this.needsToCompleteInitialLoad = true}) {
+      this.needsToCompleteInitialLoad = true})
+      : _createdTime = createdTime ?? DateTime.now(),
+        _lastOpenedTime = lastOpenedTime ?? DateTime.now() {
     _tabIndex = tabIndex;
     _url = url;
     _title = title;
@@ -198,6 +205,17 @@ class WebViewModel extends ChangeNotifier {
     }
   }
 
+  DateTime get createdTime => _createdTime;
+
+  DateTime get lastOpenedTime => _lastOpenedTime;
+
+  set lastOpenedTime(DateTime value) {
+    if (value != _lastOpenedTime) {
+      _lastOpenedTime = value;
+      notifyListeners();
+    }
+  }
+
   void updateWithValue(WebViewModel webViewModel) {
     tabIndex = webViewModel.tabIndex;
     url = webViewModel.url;
@@ -242,6 +260,12 @@ class WebViewModel extends ChangeNotifier {
                 map["javaScriptConsoleHistory"]?.cast<String>(),
             isSecure: map["isSecure"],
             settings: InAppWebViewSettings.fromMap(map["settings"]),
+            createdTime: map["createdTime"] != null
+                ? DateTime.tryParse(map["createdTime"])
+                : null,
+            lastOpenedTime: map["lastOpenedTime"] != null
+                ? DateTime.tryParse(map["lastOpenedTime"])
+                : null,
           )
         : null;
   }
@@ -260,6 +284,8 @@ class WebViewModel extends ChangeNotifier {
       "isSecure": _isSecure,
       "settings": settings?.toMap(),
       "screenshot": screenshot,
+      "createdTime": _createdTime.toIso8601String(),
+      "lastOpenedTime": _lastOpenedTime.toIso8601String(),
     };
   }
 

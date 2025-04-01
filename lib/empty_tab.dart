@@ -18,6 +18,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 // import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'models/browser_model.dart';
 import 'models/webview_model.dart';
+import 'models/window_model.dart';
 
 class EmptyTab extends StatefulWidget {
   final WebViewController? webViewController;
@@ -165,18 +166,28 @@ class _EmptyTabState extends State<EmptyTab> {
   }
 
   void addNewTab({WebUri? url}) {
-    var browserModel = Provider.of<BrowserModel>(context, listen: false);
-    var settings = browserModel.getSettings();
+  var browserModel = Provider.of<BrowserModel>(context, listen: false);
+  var settings = browserModel.getSettings();
 
-    url ??= settings.homePageEnabled && settings.customUrlHomePage.isNotEmpty
-        ? WebUri(settings.customUrlHomePage)
-        : WebUri(settings.searchEngine.url);
+  url ??= settings.homePageEnabled && settings.customUrlHomePage.isNotEmpty
+      ? WebUri(settings.customUrlHomePage)
+      : WebUri(settings.searchEngine.url);
 
+  if (Util.isDesktop()) {
+    // For desktop platforms
+    final windowModel = Provider.of<WindowModel>(context, listen: false);
+    windowModel.addTab(WebViewTab(
+      key: GlobalKey(),
+      webViewModel: WebViewModel(url: url),
+    ));
+  } else {
+    // For mobile platforms
     browserModel.addTab(WebViewTab(
       key: GlobalKey(),
       webViewModel: WebViewModel(url: url),
     ));
   }
+}
 
   void _showDeleteConfirmationDialog(
       MostVisitedWebsiteModel website, BuildContext context) {

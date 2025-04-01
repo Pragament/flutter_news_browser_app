@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_browser/Db/hive_db_helper.dart';
 import 'package:flutter_browser/rss_news/constants/constants.dart';
 import 'package:flutter_browser/rss_news/grpahql/graphql_requests.dart';
@@ -10,14 +11,34 @@ import 'package:flutter_browser/rss_news/screens/app_language_selection_screen.d
 import 'package:flutter_browser/rss_news/services/adblock_service.dart';
 import 'package:flutter_browser/rss_news/services/http_ovverides.dart';
 import 'package:flutter_browser/rss_news/services/unique_id.dart';
+import 'package:context_menus/context_menus.dart';
+import 'package:flutter_browser/models/browser_model.dart';
+import 'package:flutter_browser/models/webview_model.dart';
+import 'package:flutter_browser/models/window_model.dart';
+import 'package:flutter_browser/util.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_browser/models/browser_model.dart';
-import 'package:flutter_browser/models/webview_model.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:window_manager_plus/window_manager_plus.dart';
+import 'package:path/path.dart' as p;
+
 import 'browser.dart';
+
+// Define stub class for non-Windows platforms
+class WebViewEnvironment {
+  static Future<String?> getAvailableVersion() async => null;
+  static Future<WebViewEnvironment?> create({required dynamic settings}) async => null;
+}
+
+class WebViewEnvironmentSettings {
+  final String userDataFolder;
+  WebViewEnvironmentSettings({required this.userDataFolder});
+}
 
 // ignore: non_constant_identifier_names
 late final String WEB_ARCHIVE_DIR;
@@ -37,7 +58,14 @@ const double TAB_VIEWER_TOP_OFFSET_3 = 20.0;
 const double TAB_VIEWER_TOP_SCALE_TOP_OFFSET = 250.0;
 // ignore: constant_identifier_names
 const double TAB_VIEWER_TOP_SCALE_BOTTOM_OFFSET = 230.0;
-void main() async {
+
+WebViewEnvironment? webViewEnvironment;
+Database? db;
+
+int windowId = 0;
+String? windowModelId;
+
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   // WebViewPlatform.instance = WebWebViewPlatform();
   // HandShakeException fix
@@ -49,10 +77,64 @@ void main() async {
   store = await HiveStore.open(boxName: "graphql");
   // BackgroundTokenService.initialize();
 
+  if (Util.isDesktop()) {
+    windowId = args.isNotEmpty ? int.tryParse(args[0]) ?? 0 : 0;
+    windowModelId = args.length > 1 ? args[1] : null;
+    await WindowManagerPlus.ensureInitialized(windowId);
+  }
+
+  final appDocumentsDir = await getApplicationDocumentsDirectory();
+
+  if (Util.isDesktop()) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+  db = await databaseFactory.openDatabase(
+      p.join(appDocumentsDir.path, "databases", "myDb.db"),
+      options: OpenDatabaseOptions(
+          version: 1,
+          singleInstance: false,
+          onCreate: (Database db, int version) async {
+            await db.execute(
+                'CREATE TABLE browser (id INTEGER PRIMARY KEY, json TEXT)');
+            await db.execute(
+                'CREATE TABLE windows (id TEXT PRIMARY KEY, json TEXT)');
+          }));
+
+  if (Util.isDesktop()) {
+    WindowOptions windowOptions = WindowOptions(
+      center: true,
+      backgroundColor: Colors.transparent,
+      titleBarStyle:
+          Util.isWindows() ? TitleBarStyle.normal : TitleBarStyle.hidden,
+      minimumSize: const Size(1280, 720),
+      size: const Size(1280, 720),
+    );
+    WindowManagerPlus.current.waitUntilReadyToShow(windowOptions, () async {
+      if (!Util.isWindows()) {
+        await WindowManagerPlus.current.setAsFrameless();
+        await WindowManagerPlus.current.setHasShadow(true);
+      }
+      await WindowManagerPlus.current.show();
+      await WindowManagerPlus.current.focus();
+    });
+  }
+
   WEB_ARCHIVE_DIR = (await getApplicationSupportDirectory()).path;
   TAB_VIEWER_BOTTOM_OFFSET_1 = 130.0;
   TAB_VIEWER_BOTTOM_OFFSET_2 = 140.0;
   TAB_VIEWER_BOTTOM_OFFSET_3 = 150.0;
+
+  // Windows-specific WebView initialization
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+    final availableVersion = await WebViewEnvironment.getAvailableVersion();
+    assert(availableVersion != null,
+        'Failed to find an installed WebView2 Runtime or non-stable Microsoft Edge installation.');
+
+    webViewEnvironment = await WebViewEnvironment.create(
+        settings:
+            WebViewEnvironmentSettings(userDataFolder: 'flutter_browser_app'));
+  }
 
   await FlutterDownloader.initialize(debug: kDebugMode);
   HiveDBHelper.setWhitelistedWebsites(
@@ -62,15 +144,21 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => WebViewModel()),
-        ChangeNotifierProxyProvider<WebViewModel, BrowserModel>(
-          create: (_) => BrowserModel(),
-          update: (context, webViewModel, browserModel) {
-            browserModel ??= BrowserModel();
-            browserModel.setCurrentWebViewModel(webViewModel);
-            return browserModel;
-          },
+        ChangeNotifierProvider(
+          create: (context) => BrowserModel(),
         ),
+        ChangeNotifierProvider(
+          create: (context) => WebViewModel(),
+        ),
+        if (Util.isDesktop())
+          ChangeNotifierProxyProvider<WebViewModel, WindowModel>(
+            update: (context, webViewModel, windowModel) {
+              windowModel!.setCurrentWebViewModel(webViewModel);
+              return windowModel;
+            },
+            create: (BuildContext context) =>
+                WindowModel(id: null),
+          ),
         ChangeNotifierProvider(create: (_) => TimerProvider()),
         ChangeNotifierProvider(create: (_) => AdblockFilterProvider()),
       ],
@@ -79,18 +167,59 @@ void main() async {
   );
 }
 
-class FlutterBrowserApp extends StatelessWidget {
-  const FlutterBrowserApp({Key? key});
+class FlutterBrowserApp extends StatefulWidget {
+  const FlutterBrowserApp({super.key});
+
+  @override
+  State<FlutterBrowserApp> createState() => _FlutterBrowserAppState();
+}
+
+class _FlutterBrowserAppState extends State<FlutterBrowserApp>
+    with WindowListener {
+
+  // https://github.com/pichillilorenzo/window_manager_plus/issues/5
+  AppLifecycleListener? _appLifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Util.isDesktop()) {
+      WindowManagerPlus.current.addListener(this);
+
+      // https://github.com/pichillilorenzo/window_manager_plus/issues/5
+      if (WindowManagerPlus.current.id > 0 && Platform.isMacOS) {
+        _appLifecycleListener = AppLifecycleListener(
+          onStateChange: _handleStateChange,
+        );
+      }
+    }
+  }
+
+  void _handleStateChange(AppLifecycleState state) {
+    // https://github.com/pichillilorenzo/window_manager_plus/issues/5
+    if (Util.isDesktop() && WindowManagerPlus.current.id > 0 && Platform.isMacOS && state == AppLifecycleState.hidden) {
+      SchedulerBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (Util.isDesktop()) {
+      WindowManagerPlus.current.removeListener(this);
+      _appLifecycleListener?.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final materialApp = MaterialApp(
       title: 'Flutter News Browser',
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       navigatorKey: myNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       initialRoute: '/',
@@ -109,5 +238,30 @@ class FlutterBrowserApp extends StatelessWidget {
             ),
       },
     );
+
+    return Util.isMobile()
+        ? materialApp
+        : ContextMenuOverlay(
+            child: materialApp,
+          );
+  }
+
+  @override
+  void onWindowFocus([int? windowId]) {
+    if (Util.isDesktop()) {
+      setState(() {});
+      if (!Util.isWindows()) {
+        WindowManagerPlus.current.setMovable(false);
+      }
+    }
+  }
+
+  @override
+  void onWindowBlur([int? windowId]) {
+    if (Util.isDesktop()) {
+      if (!Util.isWindows()) {
+        WindowManagerPlus.current.setMovable(true);
+      }
+    }
   }
 }
